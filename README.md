@@ -209,3 +209,302 @@ print(process(get_input(), divisible))  # returns 191.0
 ```
 
 And that's it for the second day. Looking forward to tomorrow!
+
+## Day 3
+
+The challenge today requires us to work on a matrix that is filled in a spiral pattern. 
+They ask us to calculate the distance from the origin to the position of a given number.  
+The second part seems trivial, even a candidate to be moved to **common.py**, but the challenge
+lies on how to represent the matrix.
+
+#### Part 1
+
+As usual, let's write some tests first:
+
+```python
+assert process(1) == 0
+assert process(12) == 3
+assert process(23) == 2
+assert process(1024) == 31
+```
+
+We need a function that given a number, will return its position on the array. I feel like
+there should be a mathematical formula that describes how a spiral grows outward, but I want 
+to try to figure it out by myself, I'll research more on this later.  
+
+I'm going to expand the example to have more examples and help myself visualize what's going on:
+
+```
+101 100   99   98   97   96   95   94   93   92   91
+102  65   64   63   62   61   60   59   58   57   90
+103  66   37   36   35   34   33   32   31   56   89
+104  67   38   17   16   15   14   13   30   55   88
+105  68   39   18    5    4    3   12   29   54   87
+106  69   40   19    6    1    2   11   28   53   86
+107  70   41   20    7    8    9   10   27   52   85
+108  71   42   21   22   23   24   25   26   51   84
+109  72   43   44   45   46   47   48   49   50   83
+110  73   74   75   76   77   78   79   80   81   82
+111 112  113  114  115  116  117  118  119  120  121
+```
+
+I discarded having a matrix in memory because you would need to know beforehand how big the matrix
+is going to be (which we don't) or create the whole matrix from the beginning and expand it
+every time it gets filled up.  
+I would like to get a way of obtaining the position of the number without building up the whole matrix.  
+
+I think that if we can find which level the number is located, then we can work our way up from there:
+
+| level | capacity |
+| ----- | -------- |
+| 0     | 1        |
+| 1     | 8        |
+| 2     | 16       |
+| 3     | 24       |
+
+The relation seems evident: `level*8`  
+For a number **N**, we can iterate starting on 0 to find out the level which cumulative capacity
+is smaller than **N**.
+
+```python
+def get_level(n):
+    level = 0
+    capacity = 1
+    while n > capacity:
+        level += 1
+        capacity += level * 8
+    return level, capacity
+```
+
+Once we have found which layer is the number in, we need to find in which part of the matrix the number is in.
+There are 4 quadrants:
+- **x** = +level, **y** = [-(level+1), level]
+- **x** = -level, **y** = [(level-1), -level]
+- **y** = +level, **x** = [(level-1), -level]
+- **y** = -level, **x** = [-(level+1), level]
+
+We need to place our number in one of these quadrants, this will tell us one of the coordinates, and a range for the
+ second one.  
+To place the number in one of these quadrants we can use the cumulative capacity again. Let's see an example:
+
+- In the matrix shown above, the number 18 is located in the 2nd level.
+- We know that the 2nd level range is [10, 25] => 16
+- We want to find out which side of the matrix 18 is, so if there are 16 numbers, each side will have 16/4 elements. 
+- The last element of the previous level is 9, therefore our number is the 18 - 9 = 9th element in this level
+- 9 / 4 = 2.25, if we `ceil(2.25)` = 3, therefore our number is located on the 3rd quadrant [**y** = +level, **x** = [(level-1), -level]]
+
+The last thing we need to work out is *where* in that quadrant the number is. This bit is slightly more complicated
+to code because each the smaller number of each quadrant starts in a diferent position and the vector they follow to
+grow is different.  
+I will skip the thinking process and go to the solution directly:
+
+```python
+def positive_x(level, position):
+    return level, (-level+1)+((position-1) % (level*2))
+
+
+def positive_y(level, position):
+    return -(-level+1)-((position-1) % (level*2)), level
+
+
+def negative_x(level, position):
+    return -level, -(-level+1)-((position-1) % (level*2))
+
+
+def negative_y(level, position):
+    return (-level+1)+((position-1) % (level*2)), -level
+```
+
+Since whether the `x` or `y` match the value of `level` is what determines the quadrant, I named the functions
+accordingly.
+
+At this point we are ready to have a function that will return us the position of the number in this spiral matrix
+
+```python
+def get_location(n):
+    level, capacity = get_level(n)
+    if level == 0:
+        return 0, 0
+    position = n - (capacity - level * 8)
+    quadrant = math.ceil(position / (level*2))
+    return {
+        1: positive_x(level, position),
+        2: positive_y(level, position),
+        3: negative_x(level, position),
+        4: negative_y(level, position),
+    }[int(quadrant)]
+```
+
+Now we know *where* our number is, but this is not it! We still need to find out the distance from the origin to it.  
+The manhattan distance is very simple to code. I feel like it will show up again in the course of this edition so I added it
+ to the common functions library:
+ 
+```python
+def manhattan_distance(start, end):
+    sx, sy = start
+    ex, ey = end
+    return abs(ex - sx) + abs(ey - sy)
+```
+
+Finally we are equipped with all we need to solve the first part:
+
+```python
+def process(input):
+    x, y = get_location(int(input))
+    return manhattan_distance((0, 0), (x, y))
+
+print(process(get_input()[0]))  # returns 419
+```
+
+#### Part 2
+
+At first glance it doesn't seem we will be able to reuse anything from the first part. Apparently we do need
+to build the matrix, that is unfortunate.
+
+This time there are no test, but they gave us another example, I will write some tests based on that:
+
+```python
+assert process_second(24) == 25
+assert process_second(54) == 57
+assert process_second(700) == 747
+assert process_second(200) == 304
+```
+
+After some more thought, our existing function `get_location(n)` takes a number and returns *where* on the matrix
+it is located. We can use it to map a 1-dimension array to the 2-d spiral array.  
+However, they want us to check the adjacent values, so we need the reverse function `get_number(x, y)` that from 
+the position returns where the value will be in the 1-d array. Let's start from there, first by writing some tests:
+
+```python
+assert get_number(-1, 1) == 5
+assert get_number(2, -1) == 10
+assert get_number(5, -5) == 121
+assert get_number(0, 0) == 1
+assert get_number(-3, -1) == 41
+assert get_number(-1, 4) == 62
+assert get_number(3, -4) == 80
+```
+
+I am basing this tests on the matrix drawn before on the first part, I tried to pick all of the edge cases I could.
+Since the function `get_location(1)` returns `[0,0]`, we will make this a special case in our new function::
+
+```python
+def get_number(x, y):
+    if x == 0 and y == 0:
+        return 1
+```
+
+This is a good start, but there are ~~a few~~ infinite more cases, so let's work out the rest.  
+Following the previous logic, we can make use of the concept of `level` and `quadrant`. The level for any
+given `[x, y]` will be the biggest absolute value, therefore `level = max(abs(x), abs(y))`
+
+Next, we need to know the first number of the level:
+
+```python
+def get_start(level):
+    result = 1
+    for i in range(0, level):
+        result += i * 8
+    return result+1
+```
+
+And now the quadrant:
+
+```python
+def get_quadrant(x, y, level):
+    if abs(x) == level:
+        if x > 0:
+            if y > -level:
+                return 1, y + level - 1
+            else:
+                return 4, x + level - 1
+        else:
+            if y < level:
+                return 3, level - 1 - y
+            else:
+                return 2, level - 1 - x
+    else:
+        if y > 0:
+            return 2, level - 1 - x
+        else:
+            return 4, x + level - 1
+```
+
+I'm sure there is a more elegant way of writing this, but I was way behind by this time and didn't want
+to spend more time, this worked. I am returning a second argument in this function, I wil talk about this later.
+
+At this point we now the level and the quadrant. This narrows down the set to the numbers that fit inside 1 side of
+the square. This set is given by: `range((start+((quadrant-1)*level*2)), (start+(quadrant*level*2)))`.  
+We can turn this into a list and get a 0-index array, but how do we turn the positional axis into a 0-index array? This 
+is where the `offset` returned in the previous function comes into play. In the previous function, we find out
+whether `x` or `y` is the positinal axis, and we use the other to tell: `On the 0-index vector, move Z positions to find the number`.
+
+The final function looks like this:
+
+```python
+def get_number(x, y):
+    if x == 0 and y == 0:
+        return 1
+    level = max(abs(x), abs(y))
+    start = get_start(level)
+    quadrant, offset = get_quadrant(x, y, level)
+    r = list(range((start+((quadrant-1)*level*2)), (start+(quadrant*level*2))))
+    return r[offset]
+```
+
+We have now a way of turning points into numbers (indexes in a 1-d array) and turning numbers into 
+points in the 2-d array. But before we start coding the core logic, we need a function that gives us the adjacent
+squares we have to sum in order to build the spiral array.
+
+```python
+def get_surroundings(x, y):
+    return [(x+1, y), 
+            (x+1, y+1), 
+            (x, y+1), 
+            (x-1, y), 
+            (x-1, y-1), 
+            (x, y-1), 
+            (x-1, y+1), 
+            (x+1, y-1)]
+```
+
+Finally, we are ready to tackle the main problem. We start with the position `[0,0]` pre-filled with 1.
+Since we want to find the first value that is larger than the input, we will use that as our stop condition.
+The algorithm will:
+- Look for the 2-d coordinates the current position N in the 1-d array will represent
+- Get all the surroundings of that point
+- Foreach of the surroundings will check the existing array for the values already filled
+- Add all the existing numbers found, and set the result as the value of that position
+- When the inserted value is greater than the input, return said value
+
+The algorithm translates to code easily, but since some position of the array might be accessed before they 
+are filled, a try, except block has been added to just ignore those non-existent positions.
+
+```python
+def process_second(input):
+    inserted = 1
+    array_pos = 1
+    array = [None, 1]
+    while inserted <= int(input):
+        array_pos += 1
+        x, y = get_location(array_pos)
+        pos_to_check = get_surroundings(x, y)
+        inserted = 0
+        for cx, cy in pos_to_check:
+            try:
+                n = array[get_number(cx, cy)]
+                inserted += n
+            except:
+                pass
+        array.append(inserted)
+    return inserted
+```
+
+All tests are passing, let's now run the given input
+
+```python
+print(process_second(get_input()[0]))  # returns 295229
+```
+
+And that's it for the third day. I have the feeling that maths would have helped a lot here, but I had a lot
+of fun figuring out by myself!
