@@ -508,3 +508,117 @@ print(process_second(get_input()[0]))  # returns 295229
 
 And that's it for the third day. I have the feeling that maths would have helped a lot here, but I had a lot
 of fun figuring out by myself!
+
+## Day 3
+
+Today we are required to check the validity of some passphrases. Seems easy, let's get to it!
+
+#### Part 1
+
+Each passphrase is composed of individual word, and it is considered valid as long as all the words are unique.
+Let's get some tests in place:
+
+```python
+assert is_valid('aa bb cc dd ee') is True
+assert is_valid('aa bb cc dd aa') is False
+assert is_valid('aa bb cc dd aaa') is True
+```
+
+I run the tests against the core logic instead of the `process()` function because the process will just count the valid ones and return the total,
+the examples focus on this core logic, so I assume that the second part will change this logic, so makes sense to keep it isolated.
+
+This is the main method:
+
+```python
+def process(input, is_valid):
+    valid_count = 0
+    for password in input:
+        if is_valid(password):
+            valid_count += 1
+    return valid_count
+```
+
+Let's now start with the main problem. We will get each row of the input separately and check it's validity individually.
+I think that using a set for this would be ideal. We can do two things:
+- Input each element manually in the set, if it is already there, then it is not valid:
+```python
+def is_valid(password):
+    words = password.split()
+    dictionary = {}
+    for word in words:
+        if word not in dictionary:
+            dictionary[word] = 1
+        else:
+            return False
+    return True
+```
+- Simply create a `set()` from the list of words, it will remove any duplicates automatically
+```python
+def is_valid(password):
+    words = password.split()
+    unique_words = set(words)
+    return len(words) == len(unique_words)
+```
+Both options share the same complexity on the worst case but the first option should be more efficient on average. However
+we find ourselves again between complexity or clarity. I will go with clarity since the second option is much more elegant and simple.
+
+This should be all there is to it, let's run it
+
+```python
+print(process(get_input(), is_valid))  # returns 451
+```
+
+#### Part 2
+
+The logic for the second part remains mostly the same but now it is asking us to check for anagrams. I think we can easily
+adapt our current solution for this, but first things first:
+
+```python
+assert no_anagrams('abcde fghij') is True
+assert no_anagrams('abcde xyz ecdab') is False
+assert no_anagrams('a ab abc abd abf abj') is True
+assert no_anagrams('iiii oiii ooii oooi oooo') is True
+assert no_anagrams('oiii ioii iioi iiio') is False
+```
+
+A very easy way of checking whether two words are anagrams is to order their characters. If the resulting words are equal, then
+they are anagrams. We can take advantage of the `map()` function in python and get a list of words ordered alphabetically:
+
+```python
+words = list(map(lambda w: ''.join(sorted(w)), password.split()))
+```
+
+With this we can build our new function:
+
+```python
+def no_anagrams(password):
+    words = list(map(lambda w: ''.join(sorted(w)), password.split()))
+    unique_words = set(words)
+    return len(words) == len(unique_words)
+```
+
+I noticed that both functions share the core logic of comparing sets so I decided to isolate that. This is the final result
+after the refactoring:
+
+```python
+def is_unique(password):
+    return password.split()
+
+
+def no_anagrams(password):
+    return list(map(lambda w: ''.join(sorted(w)), password.split()))
+
+
+def is_valid(password, condition):
+    words = condition(password)
+    unique_words = set(words)
+    return len(words) == len(unique_words)
+```
+
+Test pass, time to run today's input:
+
+```python
+print(process(get_input(), no_anagrams))  # returns 223
+```
+
+This is today's challenge, a very simple one in contrast with yesterday's! We'll see what awaits us tomorrow.
