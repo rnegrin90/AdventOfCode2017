@@ -622,3 +622,5 @@ print(process(get_input(), no_anagrams))  # returns 223
 ```
 
 This is today's challenge, a very simple one in contrast with yesterday's! We'll see what awaits us tomorrow.
+
+## Day 5
