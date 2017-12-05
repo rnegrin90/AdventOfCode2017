@@ -624,3 +624,93 @@ print(process(get_input(), no_anagrams))  # returns 223
 This is today's challenge, a very simple one in contrast with yesterday's! We'll see what awaits us tomorrow.
 
 ## Day 5
+
+Today we need to find the way out of a maze. The maze is a simple array but we must follow
+some rules to get out. We are asked for how many steps are required for the given input.
+
+#### Part 1
+
+Only one example today:
+
+```python
+assert process(["0", "3", "0", "1", "-3"]) == 5
+```
+
+The rules are very simple:
+ - We start on the position 0 of the array
+ - We move the number of steps indicated by the number in our current position
+ - Once we have decided how many steps we are moving, we increase the last instruction by **1**
+ - We exit the maze when we try to access a position outside of the array
+
+These requirements are easily turned into code, let's get to it:
+
+```python
+def process(input):
+    int_input = list(map(int, input))
+    position, steps, length = 0, 0, len(int_input)
+    while 0 <= position < length:
+        offset = int_input[position]
+        int_input[position] += 1
+        position += offset
+        steps += 1
+    return steps
+```
+
+Since we are asked for the number of steps taken, we need to keep track of how many times
+the loop has run.
+
+This is all it is required for the first part, really straightforward!
+
+```python
+print(process(get_input()))  # returns 396086
+```
+
+#### Part 2
+
+Second part still maintains the way we move and exit the maze, but it adds some additional
+logic when modifying the last instruction.
+I think we can isolate what is different and provide it to the `process()` function to reuse as
+much code as possible.
+
+The previous tests now should take 10 steps according to this new rules:
+
+```python
+assert process(["0", "3", "0", "1", "-3"], greater_than_three) == 10
+```
+
+All we need to change is how the current position is modified before moving to the new one.
+Let's isolate that logic on the existing version:
+
+```python
+def increase_by_one():
+    return 1
+
+
+def process(input, get_offset_change):
+    int_input = list(map(int, input))
+    position, steps, length = 0, 0, len(int_input)
+    while 0 <= position < length:
+        offset = int_input[position]
+        int_input[position] += get_offset_change(offset)
+        position += offset
+        steps += 1
+    return steps
+```
+
+Now that we have parametrized that logic we can create the new function for the second part:
+
+```python
+def greater_than_three(offset):
+    return 1 if offset < 3 else -1
+```
+
+All done, all is left is to run it:
+
+```python
+print(process(get_input(), greater_than_three))  # returns 28675390
+```
+
+Wow! that took some time! I can't think of any changes that might improve performance but I'll
+give it a thought and come back if I find anything.
+
+That is all for today!
