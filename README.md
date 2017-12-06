@@ -714,3 +714,148 @@ Wow! that took some time! I can't think of any changes that might improve perfor
 give it a thought and come back if I find anything.
 
 That is all for today!
+
+## Day 6
+
+We will be emulating a memory reallocation system. The rules are quite extensive but simple in concept.
+Let's start!
+
+#### Part 1
+
+The first part explains how to redistribute the memory and runs through an example, however, what they
+ask for is how many steps must be taken before we see a distribution already seen (therefore resulting
+in a infinite loop)
+As always, let's go with the tests first:
+
+```python
+assert process("0\t2\t7\t0") == 5
+```
+
+They provide a tab-separated string where each number represents the current status of each memory bank.
+First thing that we need to do is to turn it into a list of integer:
+
+```python
+memory = list(map(int, input.split()))
+```
+
+Next thing that I think about is state storage. I think that the simplest way of checking
+whether a state has been already visited is storing it in a set, but for that we need
+to serialise the current state:
+
+```python
+def serialize(memory):
+    return '/'.join(map(str, memory))
+```
+
+This feels like a function that will be used more during the course of the challenge, I think I will
+move it to the shared library later...
+
+Let's go now with the loop detection logic. It should be pretty straight forward:
+- Each time we visit a configuration we store it in a set
+- While the current configuration is not in the set, we perform a memory redistribution.
+- We will have a counter while performing this algorithm to keep track of the number of cycles.
+
+```python
+def process(input):
+    memory = list(map(int, input.split()))
+    state_cache = set()
+    cycles_to_loop = 0
+    while serialize(memory) not in state_cache:
+        state_cache.add(serialize(memory))
+        memory = redistribute_blocks(memory)
+        cycles_to_loop += 1
+    return cycles_to_loop
+```
+
+After this the only thing left is to code the redistribution logic:
+- Search the largest number (**n**) in the array
+- Set that position to 0
+- Move to the next position in the array, if the position is larger than the size of the array, go back to the beginning
+- Add 1 to the number in that position, subtract 1 from **n**
+- Stop when **n** = 0
+
+Let's translate it into code:
+
+```python
+def redistribute_blocks(memory):
+    max_value = max(memory)
+    index = memory.index(max_value)
+    memory[index] = 0
+    while max_value > 0:
+        index = (index + 1) % len(memory)
+        memory[index] += 1
+        max_value -= 1
+    return memory
+```
+
+Now we have everything we need, let's run the solution:
+
+```python
+print(process(get_input()[0]))  # returns 11137
+```
+
+#### Part 2
+
+The second part is simple and short. All they want to know is, once you find the loop, how many cycles
+are part of that loop.
+I don't think the current solution requires a lot of modification. We can change the set to be
+a dictionary that stores the number of times the configuration has been seen, when the first 2 appears,
+we know we have been through the loop 2 times.
+
+For the test, I assume we will use the same loop and both solutions will be returned on the same function
+so I'll just modify the previous test:
+
+```python
+assert process("0\t2\t7\t0") == (5, 4)
+```
+
+We will now have 2 counters, and each one will increase depending on whether the current state
+has been already seen or not:
+
+```python
+def process(input):
+    memory = list(map(int, input.split()))
+    state_cache = {}
+    cycles_to_loop = 0
+    cycles_in_loop = 0
+    current_state = serialize(memory)
+    while current_state not in state_cache or state_cache[current_state] != 2:
+        if current_state not in state_cache:
+            state_cache[current_state] = 1
+            cycles_to_loop += 1
+        else:
+            state_cache[current_state] += 1
+            cycles_in_loop += 1
+        memory = redistribute_blocks(memory)
+        current_state = serialize(memory)
+    return cycles_to_loop, cycles_in_loop
+```
+
+An alternative implementation could be to simply run the first loop until we get to the first
+visited state and then continue where that one left off until it is found a second time:
+
+```python
+def process(input):
+    memory = list(map(int, input.split()))
+    state_cache = {}
+    cycles_to_loop = 0
+    while serialize(memory) not in state_cache:
+        state_cache[serialize(memory)] = 1
+        memory = redistribute_blocks(memory)
+        cycles_to_loop += 1
+    cycles_in_loop = 0
+    while state_cache[serialize(memory)] != 2:
+        state_cache[serialize(memory)] += 1
+        memory = redistribute_blocks(memory)
+        cycles_in_loop += 1
+    return cycles_to_loop, cycles_in_loop
+```
+
+None of them are particularly cleaner so I don't really have a preference, but the second one
+has lower cyclomatic complexity.
+
+Now let's run the solution:
+
+```python
+print(process(get_input()[0]))  # returns (11137, 1037)
+```
