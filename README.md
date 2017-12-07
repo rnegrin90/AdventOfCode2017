@@ -509,7 +509,7 @@ print(process_second(get_input()[0]))  # returns 295229
 And that's it for the third day. I have the feeling that maths would have helped a lot here, but I had a lot
 of fun figuring out by myself!
 
-## Day 3
+## Day 4
 
 Today we are required to check the validity of some passphrases. Seems easy, let's get to it!
 
@@ -859,3 +859,79 @@ Now let's run the solution:
 ```python
 print(process(get_input()[0]))  # returns (11137, 1037)
 ```
+
+## Day 7
+
+Trees! To get today's answers we need to create a tree structure. It seems to be a simple tree, so should not be
+too difficult, let's get to it!
+
+#### Part 1
+
+They ask for the name of the root node. This one is tricky, because there is no actual need
+to build a tree in memory to get that answer, buuuuuuut we all know it will be required for the
+second part. Since I am definitively not competing for points, I'll start building the tree now.
+Before starting, another thing I noticed is the number at the side of each node (it's weight
+apparently). It is clear that the second part is going to involve using those, so I'll make sure they
+are stored correctly against each node.
+
+Here is the intial test case:
+
+```python
+test_input = """pbga (66)
+xhth (57)
+ebii (61)
+havc (66)
+ktlj (57)
+fwft (72) -> ktlj, cntj, xhth
+qoyq (66)
+padx (45) -> pbga, havc, qoyq
+tknk (41) -> ugml, padx, fwft
+jptl (61)
+ugml (68) -> gyxo, ebii, jptl
+gyxo (61)
+cntj (57)"""
+assert process(test_input.split('\n')) == "tknk"
+```
+
+I think I am going to store the tree as a dictionary instead of a linked structure. Let's define
+our node class:
+
+```python
+class Node:
+    def __init__(self, uid):
+        self.uid = uid
+        self.next = set()
+
+
+class Program(Node):
+    def __init__(self, uid, weight):
+        super().__init__(uid)
+        self.weight = weight
+```
+
+I created Node separate from program to move it to the `common.py` library just in case there are
+more tree related challenges.
+
+I can store the whole tree in a dictionary with the `uid` as the key and the `Program` object as value.
+I will define `next` as a set of uid. I decided to do this, as opposed to having the reference to the
+actual node because initially, we don't know what the root node is or the order on the input. Having
+it this way, I only need to parse the input once.
+
+Now I need something that takes a line from the input and turns it into a `Program` object:
+
+```python
+def parse_program(program):
+    p = program.split('->')
+    above = None
+    if len(p) > 1:
+        above = map(lambda s: s.strip(), p[1].split(','))
+    name, weight = p[0].split('(')
+    result = Program(name.strip(), int(weight.replace(")", "".strip())))
+    if above:
+        result.next = set(above)
+    return result
+```
+
+Nothing fancy here, I didn't want to waste time using `re` so went for the easy solution.
+
+I need to generate the tree. I would like isolate that logic
