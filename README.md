@@ -932,6 +932,307 @@ def parse_program(program):
     return result
 ```
 
-Nothing fancy here, I didn't want to waste time using `re` so went for the easy solution.
+Nothing fancy here, I didn't want to waste time building a regex for `re` so went for the quick and easy solution.
 
-I need to generate the tree. I would like isolate that logic
+I need to generate the tree and I would like to isolate that logic so it can be used again in the future (seems likely that we will
+see another tree this year):
+
+```python
+def get_head_node(tree):
+    head_node = None
+    parent_nodes = list(filter(lambda p: len(tree[p].next) > 0, tree))
+    for node in parent_nodes:
+        found = False
+        for n in parent_nodes:
+            found = tree[node].uid in tree[n].next
+        if not found:
+            head_node = tree[node]
+    return head_node
+
+
+def generate_tree(input, parse_node):
+    tree = {}
+    for inst in input:
+        node = parse_node(inst)
+        tree[node.uid] = node
+    return tree, get_head_node(tree)
+```
+
+- The `generate_tree` function requires a list where each element contains the definition of a node and
+a `parse_node` function that will turn whatever the format the input elements come in, into a `Node` class.
+It then stores all the nodes in a dictionary and parses it to search the root (or _head_) node.
+
+- `get_head_node` parses the list of nodes searching for a node id that does not appear as a children
+node of any other. It filters out any leaf node first to reduce the starting set.
+
+Now that we have a tree (and the head node) we just need to return the uid of the node:
+
+```python
+def process(input):
+    tower, head_node = generate_tree(input, parse_program)
+    return head_node.uid
+```
+
+Let's see the result
+
+```python
+print(process(get_input()))  # returns 'bsfpjtc'
+```
+
+#### Part 2
+
+As expected, the second part requires having the tree structure and using the node's weights.
+Since the test case provided is the same and to resolve the second part I need structure created
+by the first part, I'll just modify the response to include both:
+
+```python
+test_input = """pbga (66)
+xhth (57)
+ebii (61)
+havc (66)
+ktlj (57)
+fwft (72) -> ktlj, cntj, xhth
+qoyq (66)
+padx (45) -> pbga, havc, qoyq
+tknk (41) -> ugml, padx, fwft
+jptl (61)
+ugml (68) -> gyxo, ebii, jptl
+gyxo (61)
+cntj (57)"""
+assert process(test_input.split('\n')) == ("tknk", 60)
+```
+
+The problem ask us to find what would be the expected weight for the tower to be balanced (took
+me a few errors to find this out), but to get there we need to do find which node is unbalancing
+the tree and what is the weight difference between the balanced and unbalanced branches.
+There are a few ways to get there but I the first one that came to my head was to introduce a cumulative
+weight property in each node that will contain the 
+We also need to add the concept of cumulative weight (the sum of the weight of all the branches)
+so let's update our class:
+
+```python
+class Program(Node):
+    def __init__(self, uid, weight):
+        super().__init__(uid)
+        self.weight = weight
+        self.total_weight = 0
+```
+
+We also need to calculate that weight. Calculating it is very simple using recursion:
+
+```python
+def generate_subtree_weight(node, tree):
+    if len(node.next) > 0:
+        for sub_node in node.next:
+            node.total_weight += generate_subtree_weight(tree[sub_node], tree)
+    node.total_weight += node.weight
+    return node.total_weight
+```
+
+I am not overly keen on passing a mutable object to a function (the tree would come out modified
+and the final return value is not really being used) but it just makes it simpler. To make the main function
+clearer I wrapped this functionality into another that states what is happening a bit more clearly:
+
+```python
+def get_weighted_tower(head, tower):
+    generate_subtree_weight(head, tower)
+    return tower
+```
+
+Now that we have the tree in a state where we can answer the question, let's implement the
+algorithm.
+I want to use recursion here as well, and it will follow this logic:
+- Look at the children of the current node
+- Get the total weight of the subtree they hold
+- Find the only branch that is unbalanced, if no branch is unbalanced, skip next step
+- Repeat the process having the unbalanced node as the current node
+- Get the weight difference between the current node and the other branches in the same level
+
+This is a rough plan of what I planned to do, the implementation is slightly different, but it
+follows that pattern:
+
+```python
+def get_expected_weight(head, tower):
+    this_level = {}
+    for sub_node in head.next:
+        n = tower[sub_node]
+        if n.total_weight in this_level:
+            this_level[n.total_weight].append(n.uid)
+        else:
+            this_level[n.total_weight] = [n.uid]
+    if len(this_level) > 1:
+        unbalanced_weight = next(filter(lambda l: len(this_level[l]) == 1, this_level))
+        unbalanced_node = this_level[unbalanced_weight][0]
+        expected_weight = get_expected_weight(tower[unbalanced_node], tower)
+        if expected_weight is None:
+            weight_difference = unbalanced_weight - next(filter(lambda l: len(this_level[l]) > 1, this_level))
+            return tower[unbalanced_node].weight - weight_difference
+        else:
+            return expected_weight
+    return None
+```
+
+Let's go bit by bit:
+- `this_level` is a dictionary where the key is the total weight of a branch and the value is
+a list of uid of the nodes that share the same weight. I have made an assumption here (maybe a
+risky one) that every level will have more than two branches. If a level has two branches the
+behaviour would need to change (maybe using a stack to keep the nodes that need to be visited).
+- The first loop fills said dictionary
+- If the length of the dictionary is 1 (or less if it has no children), it will return None,
+signifying that it is balanced
+- If it is greater than 1, then the key that has exactly 1 value will be the unbalanced branch
+- So we now call the same function with the unbalanced node as the parameter.
+- We now check what the recursion brought back:
+    - If the return of the function is `None` it means the children of that node are balanced,
+therefore he is the one that is causing the unbalance. We need to calculate the expected weight
+of the node for it to be balanced (we do that with help of the `this_level` dictionary).
+    - If the result is not `None` it meas somewhere else the result was found, so we need to
+    end the recursion and bubble up the result.
+
+That is all we need for today, let's have a look at the updated `process` function:
+
+```python
+def process(input):
+    tower, head_node = generate_tree(input, parse_program)
+    tower = get_weighted_tower(head_node, tower)
+    expected_weight = get_expected_weight(head_node, tower)
+    return head_node.uid, expected_weight
+```
+
+And the result:
+
+```python
+print(process(get_input()))  # returns ('bsfpjtc', 529)
+```
+
+That's it for today. I'm not overly excited about the solution, there are probably
+much better solutions, but this one does the job. See you tomorrow!
+
+## Day 8
+
+Today we need to compute the result of some operations specified on the input provided.
+This operations contain conditional elements.
+
+#### Part 1
+
+We need to return the variable that contains the highest number, let's write a tests for the
+input provided:
+
+```python
+test_input = """b inc 5 if a > 1
+a inc 1 if b < 5
+c dec -10 if a >= 1
+c inc -20 if c == 10"""
+assert process(test_input.split('\n')) == 1
+```
+
+I see a cheeky way of doing this using `eval`, but let's be nice and not use it... (maybe some other
+time).
+First we need to parse the things that interests us from the input. It seem like it is stable through
+the whole file, so let's go with a regex (first of the season!):
+
+```python
+def parse_instruction(instruction):
+    return re.search(r"(\w+) (\w+) (-?\d+) if (\w+) ([><=!]+) (-?\w+)", instruction).groups()
+```
+This should return a list with all the matches, so let's unpack that into variables:
+
+```python
+token, op, val, cond_token, cond_op, cond_val = parse_instruction(instruction)
+```
+
+According to the rules, we need to make the operation if the condition is true, and that takes us
+to the use of the operators. We need to map the operator symbol to the actual operation. We can do
+that with a simple dictionary:
+
+```python
+operators = {
+    '>': lambda left, right: left > right,
+    '<': lambda left, right: left < right,
+    '>=': lambda left, right: left >= right,
+    '<=': lambda left, right: left <= right,
+    '==': lambda left, right: left == right,
+    '!=': lambda left, right: left != right,
+    'dec': lambda left, right: left - right,
+    'inc': lambda left, right: left + right
+}
+```
+
+Now that we have our operators, we can go ahead and check whether the condition is met:
+
+```python
+def process_condition(cond_token, cond_op, cond_val, registry):
+    left_val = 0
+    right_val = int(cond_val)
+    if cond_token in registry:
+        left_val = registry[cond_token]
+    return operators[cond_op](left_val, right_val)
+```
+
+We need to pass the registry because the conditions access the value of other variables (0 by default
+if the variable has not been seen before).
+
+Last but not least, the function that orchestrates all the other logic and performs the `inc/dec`
+operation:
+
+```python
+def process(input):
+    registry = dict()
+    for instruction in input:
+        token, op, val, cond_token, cond_op, cond_val = parse_instruction(instruction)
+        cond = process_condition(cond_token, cond_op, cond_val, registry)
+        current_val = 0 if token not in registry else registry[token]
+        registry[token] = operators[op](current_val, int(val)) if cond else current_val
+    return max(registry.values())
+```
+
+After calling the parsing and condition analysis functions, all is left is to apply the operation
+to the current element (stored in the `registry` dictionary, using the variable name as the key)
+if the condition is met, or leaving it untouched otherwise.
+
+Th final result is:
+
+```python
+print(process(get_input()))  # returns 3745
+```
+
+#### Part 2
+
+The second part for today is very simple for out implementation! We need to return the
+highest value ever stored. As usual, since we can get this answer alongside the initial solution,
+I'll return both at the same time:
+
+```python
+test_input = """b inc 5 if a > 1
+a inc 1 if b < 5
+c dec -10 if a >= 1
+c inc -20 if c == 10"""
+assert process(test_input.split('\n')) == (1, 10)
+```
+
+The only change required for this is to check for the biggest value ever seen every time
+a new entry is inserted in the registry. Here is the code:
+
+```python
+def process(input):
+    registry = dict()
+    max_value = 0
+    for instruction in input:
+        token, op, val, cond_token, cond_op, cond_val = parse_instruction(instruction)
+        cond = process_condition(cond_token, cond_op, cond_val, registry)
+        current_val = 0 if token not in registry else registry[token]
+        registry[token] = operators[op](current_val, int(val)) if cond else current_val
+        max_value = registry[token] if registry[token] > max_value else max_value
+    return max(registry.values()), max_value
+```
+
+There is nothing to explain in these changes since it is just a variable that holds the highes
+value ever seen.
+
+If we run it we should see:
+
+```python
+print(process(get_input()))  # returns (3745, 4644)
+```
+
+A very simple day today, tomorrow is Saturday so we should expect a harder one! Enjoy!
