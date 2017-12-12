@@ -860,7 +860,7 @@ Now let's run the solution:
 print(process(get_input()[0]))  # returns (11137, 1037)
 ```
 
-## Day 7
+## Day 7 <a name="day7"></a>
 
 Trees! To get today's answers we need to create a tree structure. It seems to be a simple tree, so should not be
 too difficult, let's get to it!
@@ -1236,3 +1236,611 @@ print(process(get_input()))  # returns (3745, 4644)
 ```
 
 A very simple day today, tomorrow is Saturday so we should expect a harder one! Enjoy!
+
+## Day 9
+
+Today we need to process a stream of characters which apparently contains random characters
+but some of those characters have meaning. Let's start.
+
+#### Part 1
+
+Seems like we need to calculate a score based on the number of groups and its nesting, let's
+write some tests for it:
+
+```python
+assert process("{}") == 1
+assert process("{{{}}}") == 6
+assert process("{{},{}}") == 5
+assert process("{{{},{},{{}}}}") == 16
+assert process("{<a>,<a>,<a>,<a>}") == 1
+assert process("{{<ab>},{<ab>},{<ab>},{<ab>}}") == 9
+assert process("{{<!!>},{<!!>},{<!!>},{<!!>}}") == 9
+assert process("{{<a!>},{<a!>},{<a!>},{<ab>}}") == 3
+```
+
+After reading the requirements seems like the set of characters that we need to pay attention
+are: `{}!<>`.
+There is also 2 important assumptions stated: **All characters are valid** and **no group is
+malformed**; this should make the challenge easier, let's hope it doesn't change on
+the second part!
+
+Let's dive into what we need to do with each one of them:
+- `{` This character will start a new group which will be closed by the next `}` at the same level
+We need to track which level we are at the moment to be able to keep track of the "open groups"
+we currently have.
+- `}` This one closes the last group opened, going down a level on the "open groups" count.
+- `!` This one makes the next character lose its value. I see two ways of implementing this one:
+    - Have a `ignore_next` flag activated when we find this character and immediately deactivated
+    right after
+    - Keep track of the previous character, if it is `!`, ignore the current one.
+- `<` This one opens a "garbage" section where **all the other characters are ignored** except
+for `>` and `!`. This section has no levels. Seems like we can use a simple `garbage_mode` flag
+to achieve this behaviour.
+- `>` It will deactivate the `garbage_mode` and go back to normal processing.
+
+We have now all the rules, let's turn them into code:
+
+```python
+def process(input):
+    garbage_mode = False
+    last_char = None
+    level, value_sum = 0, 0
+    for char in list(input):
+        if last_char == '!':
+            last_char = None
+            continue
+        garbage_mode = char == '<' or garbage_mode
+        if char == '>':
+            garbage_mode = False
+        if not garbage_mode and char == '{':
+            level += 1
+        if not garbage_mode and char == '}':
+            value_sum += level
+            level -= 1
+        last_char = char
+    return value_sum
+```
+
+A few comments on this code:
+- I decided to track the last character for the `!` functionality since the cost is about the
+same and feels a bit more resilient for the next stage.
+- I increment the score counter when a group is closed, but if could have been done when it is
+opened since it was stated that all the groups are correct.
+
+Everything else has been directly turned into code from the previous analysis, let's now
+run the given input:
+
+```python
+print(process(get_input()[0]))  # returns 16869
+```
+
+#### Part 2
+
+This part is simpler than expected! They just want to know how many characters are within the
+garbage areas, excluding the `!` and the characters cancelled by them.
+The new tests look like this:
+
+```python
+assert process("<>")[1] == 0
+assert process("<random characters>")[1] == 17
+assert process("<<<<>")[1] == 3
+assert process("<{!>}>")[1] == 2
+assert process("<!!>")[1] == 0
+assert process("<!!!>>")[1] == 0
+assert process('<{o"i!a,<{i<a>')[1] == 10
+```
+
+We used to ignore completely those characters, now we simply need to add an extra condition that
+will increase another counter:
+
+```python
+def process(input):
+    garbage_mode = False
+    last_char = None
+    level, value_sum, cancelled_chars = 0, 0, 0
+    for char in list(input):
+        if last_char == '!':
+            last_char = None
+            continue
+        if garbage_mode and char not in ['>', '!']:
+            cancelled_chars += 1
+        garbage_mode = char == '<' or garbage_mode
+        if char == '>':
+            garbage_mode = False
+        if not garbage_mode and char == '{':
+            level += 1
+        if not garbage_mode and char == '}':
+            value_sum += level
+            level -= 1
+        last_char = char
+    return value_sum, cancelled_chars
+```
+
+Now we run it:
+
+```python
+print(process(get_input()[0]))  # returns (16869, 7284)
+```
+
+And that is it for today!
+
+## Day 10
+
+Seems like we will be building a custom hashing function. Explanation seems long and with a lot
+of moving parts, this looks interesting, let's get to it!
+
+#### Part 1
+
+Apparently the example provided is based in a array of length 5 [0..4] but for the main challenge we
+will need to use an array of length 256 [0..255]:
+
+```python
+assert process("3,4,1,5", 5) == 12
+```
+
+Let's go through the steps we will need to make to get to that result and then turn them into
+code.
+
+We get the array of lengths from the input but the array we need to apply the hash to will vary
+in length, so we can do:
+
+```python
+lengths = list(map(int, input.split(',')))
+l = list(range(0, size))
+```
+
+Now that we have our input sorted, we can start the hashing. This part is a bit more complex
+because we have to treat our list as circular:
+- For each length we will grab the slice that we need to reverse
+- Starting from the current position, we will overwrite it with the each element of the
+reversed slice, moving the current position forward after each change. If we overflow the array
+we will go back to 0.
+- After we finish with each length we will set the starting position of the next iteration
+according to the rules, as well as the `skip` value
+
+After turning this into code we end up with:
+
+```python
+def custom_hash(l, lengths):
+    pos, skip = 0, 0
+    for length in lengths:
+        sub_list = list(reversed(list(slice_list(l, pos, length))))
+        i = pos
+        for j in sub_list:
+            l[i] = j
+            i += 1
+            if i >= len(l):
+                i = i % len(l)
+        pos = (pos+length+skip) % len(l)
+        skip += 1
+    return l, pos, skip
+```
+
+I have isolated the bit that takes care of slicing the list since there will be a decent
+amount of code taking care of the fact that it is a circular list.
+**Update** ~~I was living in a lie~~ I just found out `itertools` has a `cicle()` method
+that takes care of making a list circular, I'll write the initial version and then a modified
+one with my newly acquired knowledge.
+
+```python
+def slice_list(input_list, current_pos, length):
+    if length == 0:
+        return
+    next_pos = (current_pos+length) % len(input_list)
+    pos = current_pos
+    if next_pos == pos:
+        yield input_list[pos]
+        pos += 1
+    while pos != next_pos:
+        yield input_list[pos]
+        pos += 1
+        if pos >= len(input_list):
+            pos = pos % len(input_list)
+```
+
+The core logic for this is the last `while` loop. The two `if` had to be added to cater for
+edge cases when the length was 0 or equal to the array size.
+While the current position is different from the target position, it will **yield** the current
+element and keep iterating.
+Let's now see what this looks like using `cycle`:
+
+```python
+def slice_list(input_list, current_pos, length):
+    circular = cycle(input_list)
+    for i in range(0, current_pos+length):
+        if i >= current_pos:
+            yield next(circular)
+        else:
+            next(circular)
+```
+
+It looks so much better! Simple and clear!
+
+After writing the hash function, we should now have the shuffled array, so we need to return the
+product of the first and second items:
+
+```python
+def process(input, size):
+    lengths = list(map(int, input.split(',')))
+    l = list(range(0, size))
+    result = custom_hash(l, lengths)
+    return result[0] * result[1]
+
+print(process(get_input()[0], 256))  # returns 826
+```
+
+#### Part 2
+
+The second part builds upon the previous _hashing_ concept, but expands it to eventually
+obtain a 32 character hex string.
+
+It seems that even though the hashing logic remains the same, we need to process both the input
+and output further (as well as repeat the hashing process). This will need a lot of refactoring
+on the original code, I will go through the bits I think we might need to refactor first:
+
+- The input is not parsed straight into a `int` array
+```python
+def to_int_list(input):
+    return list(map(int, input.split(',')))
+```
+- Result is no longer the multiplication of the first two, it involves some operations on
+the shuffled array
+```python
+def product_result(list):
+    return list[0] * list[1]
+```
+- The hashing algorithm needs to be repeated `64` times now, but maintaining the previous position
+in the array and the skip size
+```python
+def process(input, size, rounds, parse_input, process_result):
+    lengths = parse_input(input)
+    l = generate_range(size)
+    pos, skip = 0, 0
+    for i in range(0, rounds):
+        result, pos, skip = custom_hash(l, lengths, pos, skip)
+    return process_result(result)
+```
+- I decided I might as well refactor the range generation
+```python
+def generate_range(size):
+    return list(range(0, size))
+```
+- Test and solution for the first part looks like this now
+```python
+assert process("3,4,1,5", 5, 1, to_int_list, product_result) == 12
+
+print(process(get_input()[0], 256, 1, to_int_list, product_result))  # returns 826
+```
+
+Now we are ready to write the tests for the second part:
+
+```python
+assert process("", 256, 64, generate_from_ascii, hex_result) == "a2582a3a0e66e6e86e3812dcb672a272"
+assert process("AoC 2017", 256, 64, generate_from_ascii, hex_result) == "33efeb34ea91902bb2f59c9920caa6cd"
+assert process("1,2,3", 256, 64, generate_from_ascii, hex_result) == "3efbe78a8d82f29979031a4aa0b16a9d"
+assert process("1,2,4", 256, 64, generate_from_ascii, hex_result) == "63960835bcdc130f0b66d7ff4f6a5a8e"
+```
+
+Let's now go with the first moving part, `generate_from_ascii`. We need to turn now each character
+from the input into its ASCII value.
+We are given an example, so let's write a small test for it:
+
+```python
+assert generate_from_ascii("1,2,3") == [49, 44, 50, 44, 51, 17, 31, 73, 47, 23]
+```
+
+The logic is pretty straight forward:
+
+```python
+def generate_from_ascii(word):
+    result = list()
+    for c in word:
+        result.append(ord(c))
+    return result + [17, 31, 73, 47, 23]
+```
+
+For the second moving part (`hex_result`) needs a series of steps:
+- We need to take our shuffled array or _sparse hash_ and turn it into a dense hash
+- Turn the dense hash into a hex string
+
+According to the description, a _dense hash_ is an array of 16 elements, where each element
+is the XOR of the 1/16 elements of the _sparse hash_:
+
+```python
+def get_dense_hash(input_list):
+    hash_result = list()
+    steps = int(len(input_list) / 16)
+    start = 0
+    end = steps
+    for i in range(0, 16):
+        sl = input_list[start:end]
+        hash_result.append(reduce(lambda x, y: x ^ y, sl))
+        start += steps
+        end += steps
+    return hash_result
+```
+
+Now to turn it into hex format we can write a small test based on the example and then turn it
+into code:
+
+```python
+assert to_hex_string([64, 7, 255]) == "4007ff"
+
+
+def to_hex_string(input_list):
+    result = list()
+    for element in input_list:
+        result.append('{0:02x}'.format(element))
+    return ''.join(result)
+```
+
+We have now all we need for the second moving part:
+
+```python
+def hex_result(list):
+    return to_hex_string(get_dense_hash(list))
+```
+
+Let's run the code with the given input:
+
+```python
+print(process(get_input()[0], 256, 64, generate_from_ascii, hex_result))  # returns "d067d3f14d07e09c2e7308c3926605c4"
+```
+
+Another Sunday is over! Not a excessively complex challenge but quite involved, an opportunity to
+use TDD!
+
+## Day 11
+
+Again, back to a simple challenge, this time we need to use a cube coordinate system to store
+hexagons.
+
+#### Part 1
+
+As usual, let's turn the examples into tests first:
+
+```python
+assert process("ne,ne,ne") == 3
+assert process("ne,ne,sw,sw") == 0
+assert process("ne,ne,s,s") == 2
+assert process("se,sw,se,sw,sw") == 3
+```
+
+We need to represent in memory an hexagon grid. I tried to think about an efficient way of
+doing it, but I quickly decided not to reinvent the wheel and resorted to [this](https://www.redblobgames.com/grids/hexagons/#coordinates-axial).
+They in detail over the theory behind the different representations of a hexagon grid. I went for
+the axial one since the less coordinates, the better.
+
+We have a set amount of movements, so we can write a dictionary of lambdas that contain these rules:
+
+```python
+movements = {
+    'n': lambda x, y: (x, y-1),
+    's': lambda x, y: (x, y+1),
+    'ne': lambda x, y: (x+1, y-1),
+    'nw': lambda x, y: (x-1, y),
+    'se': lambda x, y: (x+1, y),
+    'sw': lambda x, y: (x-1, y+1),
+}
+```
+
+Once we have the movements defined, well, we need to move:
+
+```python
+def process(input):
+    x, y = 0, 0
+    for dir in input.split(','):
+        x, y = movements[dir](x, y)
+    return distance((0, 0), (x, y))
+```
+
+The input is stored in a single line so we can directly iterate over the split. To get the distance
+we need to get the value of `z` first (if you go to the website from before, each hexagon is
+actually represented by a set of `x, y, z` coordinates, but since they match the constraint `x + y + z = 0`
+we can omit one of them and infer it later.
+
+```python
+def get_z(hex_coord):
+    x, y = hex_coord
+    return -x-y
+```
+
+We can now get the distance from one hexagon to any other:
+
+```python
+def distance(a, b):
+    sx, sy = a
+    ex, ey = b
+    return (abs(sx - ex) + abs(sy - ey) + abs(get_z(a) - get_z(b))) / 2
+```
+
+Everything ready, we can now run our program:
+
+```python
+print(process(get_input()[0]))  # returns 796
+```
+
+#### Part 2
+
+Short and simple, what was the furthest we ever got while moving around?
+We can answer that with a small code change, but let's update the tests first:
+
+```python
+assert process("ne,ne,ne") == (3, 3)
+assert process("ne,ne,sw,sw") == (0, 2)
+assert process("ne,ne,s,s") == (2, 2)
+assert process("se,sw,se,sw,sw") == (3, 3)
+```
+
+We can do the change directly in `process` we only need to calculate the distance with every movement
+and store the highest. There are probably more efficient ways, but this one is simple and requires
+almost no changes:
+
+```python
+def process(input):
+    x, y = 0, 0
+    max_distance = 0
+    for dir in input.split(','):
+        x, y = movements[dir](x, y)
+        max_distance = max((max_distance, distance((0, 0), (x, y))))
+    return distance((0, 0), (x, y)), max_distance
+```
+
+And for the solution:
+
+```python
+print(process(get_input()[0]))  # returns (796, 1585)
+```
+
+Quick and simple (thanks to that blog for the awesome explanation on cube coordinates!)
+
+## Day 12
+
+I am not too inspired today, so let's go straight to it!
+
+#### Part 1
+
+```python
+test_input = """0 <-> 2
+1 <-> 1
+2 <-> 0, 3, 4
+3 <-> 2, 4
+4 <-> 2, 3, 6
+5 <-> 6
+6 <-> 4, 5"""
+assert process(test_input.split('\n'), 0) == 6
+```
+
+I set `0` as a parameter from the beginning because I strongly feel we will need to search for some
+other number later on...
+
+We need to decide on the data structure that we want to use for this. I was thinking about
+a dictionary when I remembered that [Day 7's](#day7) tree structure is exactly what I am looking
+for, I just don't want to have a root node (I knew it would be useful to have it in the `common.py`!).
+
+```python
+relations, _ = generate_tree(input, parse_line)
+```
+
+That should provide us with a dictionary which contains a list to the elements it is linked to,
+but we need to define our node parsing function:
+
+```python
+def parse_line(line):
+    groups = re.search(r'(\d+) <-> ([\d,\s]+)', line).groups()
+    node = Node(groups[0])
+    node.next = set(groups[1].replace(' ', '').split(','))
+    return node
+```
+
+Now that we have the data structure, my plan is to look for all the nodes related to the one
+we are looking for _(0 in this particular case)_ and get them into a set to get the number of
+nodes that are accessible. We have all we need for the `process` function:
+
+```python
+def process(input, id):
+    relations, _ = generate_tree(input, parse_line)
+    sub_group = get_subgroup(relations, str(id), set())
+    return len(sub_group)
+```
+
+For the last part, we need to create the `get_subgroup` function. It feels like another place
+for recursion:
+
+```python
+def get_subgroup(relations, id, visited):
+    for related in relations[id].next:
+        if related not in visited:
+            visited.add(related)
+            get_subgroup(relations, related, visited)
+    return visited
+```
+
+In this case we need a visited set because, as stated in the challenge, nodes have each other
+in their respective lists. As long as we have not visited the node already, we go to it.
+In the end, we just need to return the visited array.
+
+With all this, we can get the challenge answer:
+
+```python
+print(process(get_input(), 0))  # returns 152
+```
+
+#### Part 2
+
+This part asks us to get the count of all the different groups in the input:
+
+```python
+test_input = """0 <-> 2
+1 <-> 1
+2 <-> 0, 3, 4
+3 <-> 2, 4
+4 <-> 2, 3, 6
+5 <-> 6
+6 <-> 4, 5"""
+assert process(test_input.split('\n'), get_group_count, None) == 2
+```
+
+To use the same process function, we need to isolate the solution logic:
+
+```python
+def get_number_in_group(relations, id):
+    sub_group = get_subgroup(relations, str(id), set())
+    return len(sub_group)
+
+def process(input, solution, param):
+    relations, _ = generate_tree(input, parse_line)
+    return solution(relations, param)
+```
+
+Let's design the algorithm to get the answer:
+- We currently have a function that given a number, will return a set with all the node ids
+in the same group
+- We need to start with an arbitrary element, get the first group and exclude from the pool
+any element present in that group
+
+There are probably much better ways of doing this[*](#day12annotation1), but the quickest way of solving it was to
+parse the whole list of keys on the dictionary and check whether they already exist in a list
+of groups.
+The code looks something like this:
+
+```python
+def get_group_count(relations, *args):
+    groups = list()
+    for key in relations.keys():
+        visited = False
+        for g in groups:
+            visited += key in g
+        if not visited:
+            sub_group = set()
+            sub_group = get_subgroup(relations, key, sub_group)
+            groups.append(sub_group)
+    return len(groups)
+```
+
+<a name="day12annotation1"></a>* I wasn't happy with this solution, ugly and inefficient, so
+I decided to rewrite it into this: (**note**: you need to install `numpy` for this, you might
+want to keep the other version)
+
+```python
+def get_group_count(relations, *args):
+    groups = list()
+    keys = list(relations)
+    while len(keys) > 0:
+        sub_group = get_subgroup(relations, keys[0], set())
+        groups.append(sub_group)
+        keys = np.setdiff1d(keys, list(sub_group))
+    return len(groups)
+```
+
+This version makes use of `setdiff1d` which takes the elements from the first element that are
+not in the second.
+
+Let's now execute the given input:
+
+```python
+print(process(get_input(), get_group_count, None))  # returns 186
+```
+
+That's it for today's challenge. I am sure that there must be a better data structure to represent
+the data, but I was quite happy that I could reuse some code!

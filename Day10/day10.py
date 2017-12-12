@@ -1,21 +1,16 @@
 from functools import reduce
+from itertools import cycle
 
 from common import get_input
 
 
 def slice_list(input_list, current_pos, length):
-    if length == 0:
-        return
-    next_pos = (current_pos+length) % len(input_list)
-    pos = current_pos
-    if next_pos == pos:
-        yield input_list[pos]
-        pos += 1
-    while pos != next_pos:
-        yield input_list[pos]
-        pos += 1
-        if pos >= len(input_list):
-            pos = pos % len(input_list)
+    circular = cycle(input_list)
+    for i in range(0, current_pos+length):
+        if i >= current_pos:
+            yield next(circular)
+        else:
+            next(circular)
 
 
 def custom_hash(l, lengths, pos, skip):
@@ -40,10 +35,7 @@ def generate_from_ascii(word):
 
 
 def generate_range(size):
-    result = list()
-    for i in range(0, size):
-        result.append(i)
-    return result
+    return list(range(0, size))
 
 
 def to_int_list(input):
@@ -70,7 +62,7 @@ def get_dense_hash(input_list):
     return hash_result
 
 
-def sum_result(list):
+def product_result(list):
     return list[0] * list[1]
 
 
@@ -86,9 +78,12 @@ def process(input, size, rounds, parse_input, process_result):
         result, pos, skip = custom_hash(l, lengths, pos, skip)
     return process_result(result)
 
-assert process("3,4,1,5", 5, 1, to_int_list, sum_result) == 12
 
-print(process(get_input()[0], 256, 1, to_int_list, sum_result))
+assert process("3,4,1,5", 5, 1, to_int_list, product_result) == 12
+
+print(process(get_input()[0], 256, 1, to_int_list, product_result))
+
+assert generate_from_ascii("1,2,3") == [49, 44, 50, 44, 51, 17, 31, 73, 47, 23]
 
 assert to_hex_string([64, 7, 255]) == "4007ff"
 

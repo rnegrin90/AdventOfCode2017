@@ -1,5 +1,7 @@
 import re
 
+import numpy as np
+
 from common import get_input, Node, generate_tree
 
 
@@ -25,14 +27,11 @@ def get_number_in_group(relations, id):
 
 def get_group_count(relations, *args):
     groups = list()
-    for key in relations.keys():
-        visited = False
-        for g in groups:
-            visited += key in g
-        if not visited:
-            sub_group = set()
-            sub_group = get_subgroup(relations, key, sub_group)
-            groups.append(sub_group)
+    keys = list(relations)
+    while len(keys) > 0:
+        sub_group = get_subgroup(relations, keys[0], set())
+        groups.append(sub_group)
+        keys = np.setdiff1d(keys, list(sub_group))
     return len(groups)
 
 
