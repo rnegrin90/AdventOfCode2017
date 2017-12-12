@@ -1,6 +1,6 @@
 def get_input():
     file = open("input.txt", "r")
-    return file.readlines()
+    return list(map(lambda x: x.replace('\n', ''), file.readlines()))
 
 
 def manhattan_distance(start, end):
