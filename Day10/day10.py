@@ -81,7 +81,7 @@ def process(input, size, rounds, parse_input, process_result):
 
 assert process("3,4,1,5", 5, 1, to_int_list, product_result) == 12
 
-print(process(get_input()[0], 256, 1, to_int_list, product_result))
+# print(process(get_input()[0], 256, 1, to_int_list, product_result))
 
 assert generate_from_ascii("1,2,3") == [49, 44, 50, 44, 51, 17, 31, 73, 47, 23]
 
@@ -92,4 +92,4 @@ assert process("AoC 2017", 256, 64, generate_from_ascii, hex_result) == "33efeb3
 assert process("1,2,3", 256, 64, generate_from_ascii, hex_result) == "3efbe78a8d82f29979031a4aa0b16a9d"
 assert process("1,2,4", 256, 64, generate_from_ascii, hex_result) == "63960835bcdc130f0b66d7ff4f6a5a8e"
 
-print(process(get_input()[0], 256, 64, generate_from_ascii, hex_result))
+# print(process(get_input()[0], 256, 64, generate_from_ascii, hex_result))
