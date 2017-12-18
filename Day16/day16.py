@@ -55,6 +55,7 @@ def process(input):
                 prog = moves[dance](int(target), prog)
     return ''.join(prog)
 
+
 assert moves['s'](1, list("abcde")) == list("eabcd")
 assert moves['x'](3, 4, list("eabcd")) == list("eabdc")
 assert moves['p']('e', 'b', list("eabdc")) == list("baedc")
