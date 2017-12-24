@@ -13,7 +13,12 @@ played = {p}
 if {p} > 0:
     last_frequency = played
     cancel_token = True
-"""
+""",
+    'set': lambda p: f'{p.split(" ")[0]}={p.split(" ")[1]}',
+    'add': lambda p: f'{p.split(" ")[0]}+={p.split(" ")[1]}',
+    'mul': lambda p: f'{p.split(" ")[0]}*={p.split(" ")[1]}',
+    'mod': lambda p: f'{p.split(" ")[0]}={p.split(" ")[0]}%{p.split(" ")[1]}',
+    'jgz': lambda p: f'ct += ({p.split(" ")[1]}-1) if {p.split(" ")[0]} > 0 else 0'
 }
 
 part_two = {
@@ -26,31 +31,18 @@ while incoming.__len__() == 0 and not cancel_token:
     waiting = True
 waiting = False
 {p} = incoming.popleft()
-"""
+""",
+    'set': lambda p: f'{p.split(" ")[0]}={p.split(" ")[1]}',
+    'add': lambda p: f'{p.split(" ")[0]}+={p.split(" ")[1]}',
+    'mul': lambda p: f'{p.split(" ")[0]}*={p.split(" ")[1]}',
+    'mod': lambda p: f'{p.split(" ")[0]}={p.split(" ")[0]}%{p.split(" ")[1]}',
+    'jgz': lambda p: f'ct += ({p.split(" ")[1]}-1) if {p.split(" ")[0]} > 0 else 0'
 }
 
 
 def format_line(line, cmd):
     action, payload = line.split(' ', 1)
-    if action == 'snd':
-        return cmd[action](payload)
-    if action == 'set':
-        x, y = payload.split(' ')
-        return f'{x}={y}'
-    if action == 'add':
-        x, y = payload.split(' ')
-        return f'{x}+={y}'
-    if action == 'mul':
-        x, y = payload.split(' ')
-        return f'{x}*={y}'
-    if action == 'mod':
-        x, y = payload.split(' ')
-        return f'{x}={x}%{y}'
-    if action == 'rcv':
-        return cmd[action](payload)
-    if action == 'jgz':
-        x, y = payload.split(' ')
-        return f'ct += ({y}-1) if {x} > 0 else 0'
+    return cmd[action](payload)
 
 
 def program(input, incoming, outgoing, env, id, cmd):
@@ -107,9 +99,9 @@ rcv a
 jgz a -1
 set a 1
 jgz a -2"""
-assert process1(test_input.split('\n')) == 4
+# assert process1(test_input.split('\n')) == 4
 
-print(process1(get_input()))
+# print(process1(get_input()))
 
 
 test_input2 = """snd 1
@@ -119,6 +111,6 @@ rcv a
 rcv b
 rcv c
 rcv d"""
-assert process2(test_input2.split('\n')) == 3
+# assert process2(test_input2.split('\n')) == 3
 
-print(process2(get_input()))
+# print(process2(get_input()))
